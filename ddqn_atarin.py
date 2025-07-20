@@ -1,5 +1,5 @@
-import ale_py
-import shimmy
+import ale_py  # type: ignore
+import shimmy  # type: ignore
 import gymnasium as gym
 import torch
 import torch.nn as nn

@@ -1,4 +1,4 @@
-import ale_py
+import ale_py  # type: ignore
 import shimmy
 import gymnasium as gym
 import torch
