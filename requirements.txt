@@ -1,0 +1,20 @@
+# Dependencies for DQN Atari implementation
+# Compatible with Python 3.11
+
+# Core ML/AI libraries
+torch>=2.0.0
+numpy>=1.24.0
+
+# Gymnasium and Atari environment
+gymnasium[atari]>=0.29.0
+ale-py>=0.8.0
+shimmy>=0.2.0
+
+# Image processing
+Pillow>=10.0.0
+
+# Visualization
+matplotlib>=3.7.0
+
+# Collections and random are part of Python standard library
+# No additional requirements needed for these 
