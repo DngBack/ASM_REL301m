@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 from PIL import Image
 from gymnasium.utils.save_video import save_video  # Để lưu video
 from plot_utils import save_plots_to_folder
+import cv2
+import time
 
 # Hyperparameters
 GAMMA = 0.99  # Discount factor
@@ -26,12 +28,89 @@ FRAME_STACK = 4  # Stack 4 frames
 IMG_SIZE = 84  # Resize to 84x84
 RENDER_EVERY = 5  # Render và lưu video mỗi X episodes
 EVAL_EVERY = 1  # Đánh giá average max Q mỗi X episodes
+SHOW_REALTIME = True  # Show real-time game display
+REALTIME_DELAY = 0.05  # Delay between frames in seconds (20 FPS)
 
 
 # Preprocess frame: grayscale, resize, normalize
 def preprocess_frame(frame):
     frame = np.array(Image.fromarray(frame).convert("L").resize((IMG_SIZE, IMG_SIZE)))
     return frame / 255.0
+
+
+# Display frame in real-time
+def display_frame(frame, episode, step, total_reward, epsilon, action):
+    # Resize frame for better display (make it larger)
+    display_frame = cv2.resize(frame, (400, 400), interpolation=cv2.INTER_NEAREST)
+
+    # Add text overlay with game information
+    cv2.putText(
+        display_frame,
+        f"Episode: {episode + 1}",
+        (10, 30),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (255, 255, 255),
+        2,
+    )
+    cv2.putText(
+        display_frame,
+        f"Step: {step}",
+        (10, 60),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (255, 255, 255),
+        2,
+    )
+    cv2.putText(
+        display_frame,
+        f"Reward: {total_reward:.2f}",
+        (10, 90),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (255, 255, 255),
+        2,
+    )
+    cv2.putText(
+        display_frame,
+        f"Epsilon: {epsilon:.3f}",
+        (10, 120),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (255, 255, 255),
+        2,
+    )
+    cv2.putText(
+        display_frame,
+        f"Action: {action}",
+        (10, 150),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (255, 255, 255),
+        2,
+    )
+    cv2.putText(
+        display_frame,
+        "DDQN Agent",
+        (10, 180),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (0, 255, 0),
+        2,
+    )
+
+    # Display the frame
+    cv2.imshow("Galaxian DDQN Training", display_frame)
+
+    # Wait for key press or delay
+    key = cv2.waitKey(1) & 0xFF
+    if key == ord("q"):  # Press 'q' to quit
+        return False
+    elif key == ord("p"):  # Press 'p' to pause/unpause
+        cv2.waitKey(0)
+
+    time.sleep(REALTIME_DELAY)
+    return True
 
 
 # Q-Network (CNN)
@@ -221,6 +300,8 @@ for episode in range(NUM_EPISODES):
     total_reward = 0
     done = False
     frames = []  # List để lưu frames cho video
+    step_count = 0  # Counter for steps in current episode
+
     if episode % RENDER_EVERY == 0:
         frames.append(env.render())  # Render frame đầu tiên
 
@@ -238,9 +319,24 @@ for episode in range(NUM_EPISODES):
 
         state_stack = next_state_stack
         total_reward += reward
+        step_count += 1
+
+        # Show real-time display
+        if SHOW_REALTIME:
+            current_frame = env.render()
+            continue_training = display_frame(
+                current_frame, episode, step_count, total_reward, agent.epsilon, action
+            )
+            if not continue_training:
+                print("Training stopped by user (pressed 'q')")
+                break
 
         if episode % RENDER_EVERY == 0:
             frames.append(env.render())  # Lưu frame sau mỗi step nếu cần render
+
+    # Break out of episode loop if user quit
+    if SHOW_REALTIME and not continue_training:
+        break
 
     rewards.append(total_reward)
     print(
@@ -285,6 +381,10 @@ for episode in range(NUM_EPISODES):
         avg_max_q.append(max_q)
 
 env.close()
+
+# Close OpenCV window if real-time display was used
+if SHOW_REALTIME:
+    cv2.destroyAllWindows()
 
 # Plot 1: Reward Curve (biểu đồ cơ bản cho reward)
 plt.figure(figsize=(10, 5))

@@ -10,6 +10,7 @@ A comprehensive implementation of Deep Q-Network (DQN) and Double Deep Q-Network
 - **CNN Architecture**: Convolutional neural network for processing game frames
 - **Frame Stacking**: Stacks 4 consecutive frames for temporal information
 - **Video Recording**: Automatically saves gameplay videos during training
+- **Real-time Display**: Watch the agent play in real-time with game information overlay
 - **GPU Support**: CUDA acceleration when available
 - **Training Visualization**: Real-time reward plotting and progress tracking
 
@@ -74,6 +75,20 @@ python dqn_atarin.py
 python ddqn_atarin.py
 ```
 
+### Testing Real-time Display
+
+```bash
+python test_realtime_display.py
+```
+
+### Real-time Display Controls
+
+When running with real-time display enabled:
+
+- **Press 'q'**: Quit training and close display
+- **Press 'p'**: Pause/unpause the display
+- **Automatic**: Displays game frame with episode info, step count, reward, epsilon, and current action
+
 ### Key Parameters (Configurable in the scripts)
 
 - `NUM_EPISODES`: Number of training episodes (default: 500)
@@ -82,6 +97,8 @@ python ddqn_atarin.py
 - `EPSILON_DECAY`: Exploration rate decay (default: 0.995)
 - `TARGET_UPDATE`: Target network update frequency (default: 1000 steps)
 - `RENDER_EVERY`: Video recording frequency (default: every 50 episodes)
+- `SHOW_REALTIME`: Enable real-time display (default: True)
+- `REALTIME_DELAY`: Frame delay for real-time display (default: 0.05s = 20 FPS)
 
 ## 📊 Training Process
 
