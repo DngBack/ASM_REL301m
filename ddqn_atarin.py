@@ -9,7 +9,8 @@ import collections
 import random
 import matplotlib.pyplot as plt
 from PIL import Image
-from gymnasium.utils.save_video import save_video  # Thêm để lưu video
+from gymnasium.utils.save_video import save_video  # Để lưu video
+from plot_utils import save_plots_to_folder
 
 # Hyperparameters
 GAMMA = 0.99  # Discount factor
@@ -20,10 +21,11 @@ BATCH_SIZE = 32
 BUFFER_SIZE = 100000
 LEARNING_RATE = 0.00025
 TARGET_UPDATE = 1000  # Update target network every X steps
-NUM_EPISODES = 500
+NUM_EPISODES = 50
 FRAME_STACK = 4  # Stack 4 frames
 IMG_SIZE = 84  # Resize to 84x84
-RENDER_EVERY = 50  # Render và lưu video mỗi X episodes (để tránh lưu quá nhiều)
+RENDER_EVERY = 5  # Render và lưu video mỗi X episodes
+EVAL_EVERY = 1  # Đánh giá average max Q mỗi X episodes
 
 
 # Preprocess frame: grayscale, resize, normalize
@@ -202,12 +204,14 @@ class DDQNAgent(DQNAgent):
         self.epsilon = max(EPSILON_END, self.epsilon * EPSILON_DECAY)
 
 
-# Training Loop
+# Training Loop cho DDQN
 env = gym.make("ALE/Galaxian-v5", render_mode="rgb_array")
 action_size = env.action_space.n
 agent = DDQNAgent((FRAME_STACK, IMG_SIZE, IMG_SIZE), action_size)
 
 rewards = []
+avg_max_q = []  # List để lưu average max Q-value
+
 for episode in range(NUM_EPISODES):
     state, _ = env.reset()
     state = preprocess_frame(state)
@@ -244,26 +248,88 @@ for episode in range(NUM_EPISODES):
     )
 
     # Lưu video nếu episode cần render
-    if episode % RENDER_EVERY == 0:
-        save_video(
-            frames,
-            video_folder="videos",  # Thư mục lưu video (tạo nếu chưa có)
-            fps=30,  # FPS video
-            episode_index=episode,
-            name_prefix="galaxian_ddqn",
-        )
-        print(
-            f"Saved video for episode {episode + 1} to videos/galaxian_ddqn-episode-{episode}.mp4"
-        )
+    if episode % RENDER_EVERY == 0 and len(frames) > 0:
+        try:
+            save_video(
+                frames,
+                video_folder="videos",  # Thư mục lưu video (tạo nếu chưa có)
+                fps=30,  # FPS video
+                episode_index=episode,
+                name_prefix="galaxian_ddqn",
+            )
+            print(
+                f"Saved video for episode {episode + 1} to videos/galaxian_ddqn-episode-{episode}.mp4"
+            )
+        except Exception as e:
+            print(f"Error saving video for episode {episode + 1}: {e}")
 
-# Plot rewards
+    # Đánh giá average max Q-value mỗi EVAL_EVERY episodes
+    if episode % EVAL_EVERY == 0:
+        eval_states = []
+        # Tạo một environment riêng cho việc đánh giá để không ảnh hưởng đến training
+        eval_env = gym.make("ALE/Galaxian-v5", render_mode="rgb_array")
+        for _ in range(100):  # Sample 100 states ngẫu nhiên
+            eval_state, _ = eval_env.reset()
+            eval_state = preprocess_frame(eval_state)
+            eval_stack = np.stack([eval_state] * FRAME_STACK, axis=0)
+            eval_states.append(eval_stack)
+        eval_env.close()
+
+        eval_states = (
+            torch.FloatTensor(np.array(eval_states)).cuda()
+            if torch.cuda.is_available()
+            else torch.FloatTensor(np.array(eval_states))
+        )
+        with torch.no_grad():
+            max_q = agent.policy_net(eval_states).max(1)[0].mean().item()
+        avg_max_q.append(max_q)
+
+env.close()
+
+# Plot 1: Reward Curve (biểu đồ cơ bản cho reward)
+plt.figure(figsize=(10, 5))
 plt.plot(rewards)
 plt.xlabel("Episode")
 plt.ylabel("Total Reward")
-plt.title("DDQN Training on Galaxian")
+plt.title("DDQN Reward Curve on Galaxian")
+plt.grid(True)
+save_plots_to_folder("plots")
+plt.show()
+
+# Plot 2: Average Max Q-Value Over Time (biểu đồ cơ bản cho Q estimates)
+eval_points = list(range(0, NUM_EPISODES, EVAL_EVERY))
+plt.figure(figsize=(10, 5))
+plt.plot(eval_points[: len(avg_max_q)], avg_max_q)
+plt.xlabel("Episode")
+plt.ylabel("Average Max Q-Value")
+plt.title("DDQN Average Max Q-Value Estimates Over Training")
+plt.grid(True)
+save_plots_to_folder("plots")
 plt.show()
 
 # Save model
 torch.save(agent.policy_net.state_dict(), "ddqn_galaxian.pth")
 
-env.close()
+# Phần riêng: Plot Toy Overestimation Bias (biểu đồ minh họa bias cơ bản, không so sánh trực tiếp)
+num_actions_list = [2, 5, 10, 20, 50]
+num_samples = 10000
+bias_ddqn = []  # Chỉ plot cho DDQN-like để minh họa bias thấp
+
+for num_actions in num_actions_list:
+    true_q = np.zeros(num_actions)  # True Q=0
+    # DDQN-like: Hai estimates độc lập A và B
+    errors_a = np.random.normal(0, 1, (num_samples, num_actions))
+    errors_b = np.random.normal(0, 1, (num_samples, num_actions))
+    argmax_a = np.argmax(true_q + errors_a, axis=1)
+    dq_values = (true_q + errors_b)[np.arange(num_samples), argmax_a]
+    bias_ddqn.append(np.mean(dq_values))
+
+plt.figure(figsize=(10, 5))
+plt.plot(num_actions_list, bias_ddqn, label="DDQN-like Bias", marker="x")
+plt.xlabel("Number of Actions")
+plt.ylabel("Average Bias (Overestimation)")
+plt.title("Overestimation Bias in Toy Environment (DDQN-like)")
+plt.legend()
+plt.grid(True)
+save_plots_to_folder("plots")
+plt.show()
